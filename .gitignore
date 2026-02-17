@@ -1,6 +1,6 @@
 # .NET
-[Bb]in/
-[Oo]bj/
+**/[Bb]in/
+**/[Oo]bj/
 [Ll]og/
 [Ll]ogs/
 *.user
@@ -12,14 +12,14 @@ project.fragment.lock.json
 artifacts/
 
 # Node.js
-node_modules/
+**/node_modules/
 npm-debug.log
 yarn-error.log
 .npm
 
 # Angular
-dist/
-.angular/
+**/dist/
+**/.angular/
 *.ngfactory.ts
 *.ngsummary.json
 *.metadata.json
@@ -42,8 +42,8 @@ Thumbs.db
 *.p12
 
 # Capacitor
-android/
-ios/
+**/android/
+**/ios/
 .capacitor/
 
 # Logs
