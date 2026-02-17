@@ -2,6 +2,51 @@
 
 A full-stack VoIP (Voice over IP) application with Angular + Capacitor client and ASP.NET Core server.
 
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                         Client Applications                          │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐              │
+│  │   Web App    │  │  iOS App     │  │ Android App  │              │
+│  │  (Angular)   │  │ (Capacitor)  │  │ (Capacitor)  │              │
+│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘              │
+└─────────┼──────────────────┼──────────────────┼────────────────────┘
+          │                  │                  │
+          │   HTTPS/WSS      │   HTTPS/WSS      │   HTTPS/WSS
+          │                  │                  │
+    ┌─────┴──────────────────┴──────────────────┴────────┐
+    │              Load Balancer (K8s)                    │
+    └─────┬──────────────────┬──────────────────┬────────┘
+          │                  │                  │
+    ┌─────▼────┐      ┌──────▼─────┐    ┌──────▼─────┐
+    │ Server 1 │      │ Server 2   │    │ Server 3   │
+    │ (ASP.NET)│      │ (ASP.NET)  │    │ (ASP.NET)  │
+    └─────┬────┘      └──────┬─────┘    └──────┬─────┘
+          │                  │                  │
+          └──────────┬───────┴─────────┬────────┘
+                     │                 │
+          ┌──────────▼────────┐  ┌─────▼────────────┐
+          │   PostgreSQL      │  │   Redis          │
+          │   (User Data)     │  │   (SignalR +     │
+          │                   │  │    Cache)        │
+          └───────────────────┘  └──────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────┐
+│                      Media Path (WebRTC P2P)                         │
+│                                                                       │
+│  Client A ◄──────── Direct P2P Audio ────────► Client B             │
+│            (via STUN for NAT traversal)                              │
+│                                                                       │
+│  If P2P fails:                                                       │
+│  Client A ◄────► TURN Server (coturn) ◄────► Client B              │
+│                    (Media Relay)                                     │
+└─────────────────────────────────────────────────────────────────────┘
+
+Push Notifications:
+  Firebase (Android) ◄─── Server ───► APNS (iOS)
+```
+
 ## Architecture
 
 ### Server (ASP.NET Core)
