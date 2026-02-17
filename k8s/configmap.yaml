@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: voip-server-config
+  namespace: voip
+data:
+  appsettings.json: |
+    {
+      "Logging": {
+        "LogLevel": {
+          "Default": "Information",
+          "Microsoft.AspNetCore": "Warning"
+        }
+      },
+      "AllowedHosts": "*",
+      "ConnectionStrings": {
+        "DefaultConnection": "Host=postgres;Database=voipdb;Username=postgres;Password=postgres",
+        "Redis": "redis:6379"
+      },
+      "Jwt": {
+        "Key": "VoipServer-Secret-Key-Min-32-Characters-Required-For-Production",
+        "Issuer": "VoipServer",
+        "Audience": "VoipClient"
+      }
+    }
