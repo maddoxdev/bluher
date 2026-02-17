@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bluher Test Call</title>
+    <style>
+      body { font-family: Arial, sans-serif; max-width: 760px; margin: 0 auto; padding: 24px; }
+      .card { border: 1px solid #d1d5db; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+      .row { display: flex; gap: 8px; flex-wrap: wrap; }
+      input, button { font-size: 14px; padding: 8px 10px; }
+      #log { background: #111827; color: #e5e7eb; min-height: 160px; padding: 10px; white-space: pre-wrap; }
+    </style>
+  </head>
+  <body>
+    <h1>Тестовый звонок 1-на-1</h1>
+    <p>Без регистрации и авторизации: два человека вводят одинаковый Room ID и говорят друг с другом.</p>
+
+    <div class="card">
+      <div class="row">
+        <input id="roomId" value="demo" placeholder="Room ID" />
+        <button id="joinBtn">Join room</button>
+      </div>
+      <p><strong>Status:</strong> <span id="status">Idle</span></p>
+    </div>
+
+    <div class="card">
+      <h3>Audio</h3>
+      <audio id="remoteAudio" autoplay controls></audio>
+    </div>
+
+    <div class="card">
+      <h3>Log</h3>
+      <div id="log"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr@8.0.7/dist/browser/signalr.min.js"></script>
+    <script>
+      const statusEl = document.getElementById('status');
+      const logEl = document.getElementById('log');
+      const roomIdEl = document.getElementById('roomId');
+      const joinBtn = document.getElementById('joinBtn');
+      const remoteAudio = document.getElementById('remoteAudio');
+
+      let connection;
+      let pc;
+      let localStream;
+
+      const rtcConfig = {
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' }
+        ]
+      };
+
+      function setStatus(text) { statusEl.textContent = text; }
+      function log(text) {
+        logEl.textContent += `[${new Date().toLocaleTimeString()}] ${text}\n`;
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+
+      async function ensureLocalStream() {
+        if (localStream) return localStream;
+        localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        return localStream;
+      }
+
+      async function ensurePeerConnection() {
+        if (pc) return pc;
+
+        pc = new RTCPeerConnection(rtcConfig);
+        const stream = await ensureLocalStream();
+        stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+
+        pc.onicecandidate = async (event) => {
+          if (event.candidate) {
+            await connection.invoke('SendIceCandidate', JSON.stringify(event.candidate));
+          }
+        };
+
+        pc.ontrack = (event) => {
+          remoteAudio.srcObject = event.streams[0];
+          setStatus('Connected');
+          log('Remote stream connected.');
+        };
+
+        pc.onconnectionstatechange = () => {
+          log(`PC state: ${pc.connectionState}`);
+        };
+
+        return pc;
+      }
+
+      async function startOffer() {
+        await ensurePeerConnection();
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        await connection.invoke('SendOffer', offer.sdp);
+        setStatus('Offer sent...');
+      }
+
+      async function receiveOffer(sdp) {
+        await ensurePeerConnection();
+        await pc.setRemoteDescription({ type: 'offer', sdp });
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        await connection.invoke('SendAnswer', answer.sdp);
+        setStatus('Answer sent...');
+      }
+
+      async function receiveAnswer(sdp) {
+        if (!pc) return;
+        await pc.setRemoteDescription({ type: 'answer', sdp });
+        setStatus('Connecting...');
+      }
+
+      async function receiveCandidate(candidateJson) {
+        if (!pc) return;
+        await pc.addIceCandidate(JSON.parse(candidateJson));
+      }
+
+      async function joinRoom() {
+        joinBtn.disabled = true;
+        setStatus('Connecting...');
+
+        connection = new signalR.HubConnectionBuilder()
+          .withUrl('/hubs/signaling')
+          .withAutomaticReconnect()
+          .build();
+
+        connection.on('Joined', (roomId, count) => log(`Joined room ${roomId}. Participants: ${count}`));
+        connection.on('WaitingPeer', () => setStatus('Waiting for second user...'));
+        connection.on('StartOffer', async () => {
+          log('Second user connected. Creating offer...');
+          await startOffer();
+        });
+        connection.on('StartAnswer', () => {
+          setStatus('Connected to room. Waiting offer...');
+        });
+        connection.on('ReceiveOffer', async (sdp) => {
+          log('Offer received. Sending answer...');
+          await receiveOffer(sdp);
+        });
+        connection.on('ReceiveAnswer', async (sdp) => {
+          log('Answer received.');
+          await receiveAnswer(sdp);
+        });
+        connection.on('ReceiveIceCandidate', async (candidateJson) => await receiveCandidate(candidateJson));
+        connection.on('PeerLeft', () => {
+          setStatus('Peer left room.');
+          log('Peer left.');
+        });
+        connection.on('RoomFull', (message) => {
+          alert(message);
+          setStatus('Room full');
+          joinBtn.disabled = false;
+        });
+        connection.on('Error', (message) => log(`Error: ${message}`));
+
+        try {
+          await ensureLocalStream();
+          await connection.start();
+          await connection.invoke('JoinRoom', roomIdEl.value.trim());
+        } catch (error) {
+          log(`Connection error: ${error.message}`);
+          setStatus('Error');
+          joinBtn.disabled = false;
+        }
+      }
+
+      joinBtn.addEventListener('click', joinRoom);
+    </script>
+  </body>
+</html>
