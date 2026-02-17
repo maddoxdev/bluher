@@ -1,0 +1,53 @@
+# .NET
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Node.js
+node_modules/
+npm-debug.log
+yarn-error.log
+.npm
+
+# Angular
+dist/
+.angular/
+*.ngfactory.ts
+*.ngsummary.json
+*.metadata.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+*.pfx
+*.p12
+
+# Capacitor
+android/
+ios/
+.capacitor/
+
+# Logs
+*.log
+
+# Firebase
+firebase-credentials.json
