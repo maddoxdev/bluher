@@ -1,0 +1,25 @@
+# Node / Angular / Capacitor
+node_modules/
+dist/
+.angular/
+coverage/
+www/
+
+# .NET
+bin/
+obj/
+.vs/
+*.user
+*.suo
+
+# Env
+.env
+.env.*
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db

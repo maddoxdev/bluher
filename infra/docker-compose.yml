@@ -1,0 +1,43 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: bluher-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: bluher
+      POSTGRES_USER: bluher
+      POSTGRES_PASSWORD: bluher
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: bluher-redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+
+  coturn:
+    image: coturn/coturn:latest
+    container_name: bluher-coturn
+    restart: unless-stopped
+    command:
+      - -n
+      - --log-file=stdout
+      - --min-port=49160
+      - --max-port=49200
+      - --realm=bluher.local
+      - --fingerprint
+      - --lt-cred-mech
+      - --user=bluher:bluher_turn_secret
+    ports:
+      - '3478:3478'
+      - '3478:3478/udp'
+      - '49160-49200:49160-49200/udp'
+
+volumes:
+  postgres_data:
