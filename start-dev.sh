@@ -32,7 +32,8 @@ fi
 # Start server in background
 echo "Starting ASP.NET Core server..."
 cd server
-dotnet ef database update --no-build
+dotnet build
+dotnet ef database update
 dotnet run &
 SERVER_PID=$!
 cd ..

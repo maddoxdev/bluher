@@ -114,6 +114,12 @@ public class AuthService : IAuthService
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
+    // WARNING: SHA-256 is used here for simplicity but is NOT suitable for production!
+    // For production, use BCrypt, Argon2, or PBKDF2 which include salting and configurable work factors
+    // Example with BCrypt.Net-Next:
+    // Install: dotnet add package BCrypt.Net-Next
+    // Hash: BCrypt.Net.BCrypt.HashPassword(password)
+    // Verify: BCrypt.Net.BCrypt.Verify(password, hash)
     private static string HashPassword(string password)
     {
         using var sha256 = SHA256.Create();

@@ -4,6 +4,8 @@ using System.Security.Claims;
 using VoipServer.Data;
 using VoipServer.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Distributed;
+using System.Text.Json;
 
 namespace VoipServer.Hubs;
 
@@ -17,11 +19,12 @@ public class SignalingMessage
 public class SignalingHub : Hub
 {
     private readonly VoipDbContext _context;
-    private static readonly Dictionary<int, string> _userConnections = new();
+    private readonly IDistributedCache _cache;
 
-    public SignalingHub(VoipDbContext context)
+    public SignalingHub(VoipDbContext context, IDistributedCache cache)
     {
         _context = context;
+        _cache = cache;
     }
 
     public override async Task OnConnectedAsync()
@@ -29,10 +32,12 @@ public class SignalingHub : Hub
         var userId = GetUserId();
         if (userId.HasValue)
         {
-            lock (_userConnections)
-            {
-                _userConnections[userId.Value] = Context.ConnectionId;
-            }
+            // Store connection in distributed cache for scalability
+            await _cache.SetStringAsync(
+                $"user-connection:{userId.Value}", 
+                Context.ConnectionId,
+                new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(24) }
+            );
 
             var user = await _context.Users.FindAsync(userId.Value);
             if (user != null)
@@ -54,10 +59,8 @@ public class SignalingHub : Hub
         var userId = GetUserId();
         if (userId.HasValue)
         {
-            lock (_userConnections)
-            {
-                _userConnections.Remove(userId.Value);
-            }
+            // Remove connection from distributed cache
+            await _cache.RemoveAsync($"user-connection:{userId.Value}");
 
             var user = await _context.Users.FindAsync(userId.Value);
             if (user != null)
@@ -91,8 +94,10 @@ public class SignalingHub : Hub
         _context.Calls.Add(call);
         await _context.SaveChangesAsync();
 
-        // Send call initiation to callee
-        if (_userConnections.TryGetValue(calleeId, out var calleeConnectionId))
+        // Get callee connection from distributed cache
+        var calleeConnectionId = await _cache.GetStringAsync($"user-connection:{calleeId}");
+        
+        if (!string.IsNullOrEmpty(calleeConnectionId))
         {
             await Clients.Client(calleeConnectionId).SendAsync("IncomingCall", new
             {
@@ -116,17 +121,19 @@ public class SignalingHub : Hub
 
     public async Task SendOffer(int calleeId, string sdp)
     {
-        if (_userConnections.TryGetValue(calleeId, out var connectionId))
+        var calleeConnectionId = await _cache.GetStringAsync($"user-connection:{calleeId}");
+        if (!string.IsNullOrEmpty(calleeConnectionId))
         {
-            await Clients.Client(connectionId).SendAsync("ReceiveOffer", new { Sdp = sdp, CallerId = GetUserId() });
+            await Clients.Client(calleeConnectionId).SendAsync("ReceiveOffer", new { Sdp = sdp, CallerId = GetUserId() });
         }
     }
 
     public async Task SendAnswer(int callerId, string sdp, int callId)
     {
-        if (_userConnections.TryGetValue(callerId, out var connectionId))
+        var callerConnectionId = await _cache.GetStringAsync($"user-connection:{callerId}");
+        if (!string.IsNullOrEmpty(callerConnectionId))
         {
-            await Clients.Client(connectionId).SendAsync("ReceiveAnswer", new { Sdp = sdp, CalleeId = GetUserId() });
+            await Clients.Client(callerConnectionId).SendAsync("ReceiveAnswer", new { Sdp = sdp, CalleeId = GetUserId() });
             
             var call = await _context.Calls.FindAsync(callId);
             if (call != null)
@@ -140,9 +147,10 @@ public class SignalingHub : Hub
 
     public async Task SendIceCandidate(int targetUserId, object candidate)
     {
-        if (_userConnections.TryGetValue(targetUserId, out var connectionId))
+        var targetConnectionId = await _cache.GetStringAsync($"user-connection:{targetUserId}");
+        if (!string.IsNullOrEmpty(targetConnectionId))
         {
-            await Clients.Client(connectionId).SendAsync("ReceiveIceCandidate", new { Candidate = candidate, FromUserId = GetUserId() });
+            await Clients.Client(targetConnectionId).SendAsync("ReceiveIceCandidate", new { Candidate = candidate, FromUserId = GetUserId() });
         }
     }
 
@@ -156,9 +164,10 @@ public class SignalingHub : Hub
             await _context.SaveChangesAsync();
         }
 
-        if (_userConnections.TryGetValue(callerId, out var connectionId))
+        var callerConnectionId = await _cache.GetStringAsync($"user-connection:{callerId}");
+        if (!string.IsNullOrEmpty(callerConnectionId))
         {
-            await Clients.Client(connectionId).SendAsync("CallDeclined", new { CallId = callId });
+            await Clients.Client(callerConnectionId).SendAsync("CallDeclined", new { CallId = callId });
         }
     }
 
@@ -172,9 +181,10 @@ public class SignalingHub : Hub
             await _context.SaveChangesAsync();
         }
 
-        if (_userConnections.TryGetValue(otherUserId, out var connectionId))
+        var otherConnectionId = await _cache.GetStringAsync($"user-connection:{otherUserId}");
+        if (!string.IsNullOrEmpty(otherConnectionId))
         {
-            await Clients.Client(connectionId).SendAsync("CallEnded", new { CallId = callId });
+            await Clients.Client(otherConnectionId).SendAsync("CallEnded", new { CallId = callId });
         }
     }
 

@@ -56,14 +56,20 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddAuthorization();
 
-// SignalR with Redis backplane
+// Distributed Cache for SignalR connection tracking
 var redisConnection = builder.Configuration.GetConnectionString("Redis");
 if (!string.IsNullOrEmpty(redisConnection))
 {
+    builder.Services.AddStackExchangeRedisCache(options =>
+    {
+        options.Configuration = redisConnection;
+    });
     builder.Services.AddSignalR().AddStackExchangeRedis(redisConnection);
 }
 else
 {
+    // Use in-memory cache for development
+    builder.Services.AddDistributedMemoryCache();
     builder.Services.AddSignalR();
 }
 
